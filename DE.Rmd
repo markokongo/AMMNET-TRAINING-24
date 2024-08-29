@@ -1,0 +1,606 @@
+---
+title: "APPLIED MALARIA MATHEMATICAL MODELING"
+author: "MARK OKONGO"
+date: '`r Sys.Date()`'
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+
+```{r}
+#loading libraries
+library(caret)
+library(pROC)
+library(e1071)
+library(class)
+library(caTools)
+library(MASS)
+library(ISLR)
+library(lattice)
+library(ggplot2)
+library(psych)
+library(tidyverse)
+library(mlbench)
+library(mltools)
+library(caretEnsemble)
+library(tictoc)
+library(flextable)
+library(haven)
+library(foreign)
+library(diffeqr)
+library(lorenz)
+library(deSolve)#For solving differential equations
+library(reshape2)
+
+```
+
+
+```{r}
+
+
+# Create anew chunk [ctrl+alt+I]
+```
+
+
+```{r}
+#Solving a simple SIR Model Inbuilt in R(The graphs S,I,R drawn separately)
+
+# Define the ODE system (Only for SIR compartments)
+SIR_model <- function(t, y, parms) {
+  with(as.list(c(y, parms)), {
+    dS <- -beta * S * I
+    dI <- beta * S * I - gamma * I
+    dR <- gamma * I
+    return(list(c(dS, dI, dR)))
+  })
+}
+
+# Proportion of Initial conditions
+y0 <- c(S = 0.99, I = 0.01, R = 0)
+
+
+# define the parameters
+parameters <- c(beta = 0.3, gamma = 0.1)
+
+# Time vector
+times <- seq(0, 200, by = 0.1)
+
+# Solve the ODE system
+solution <- ode(y = y0, times = times, func = SIR_model, parms = parameters)
+
+# Plot the solution with the graphs OF S,I and R drawn separately
+plot(solution, main = "SIR Model for Infectious Diseases", xlab = "Time", ylab = "Proportion")
+
+```
+
+
+```{r}
+#Solving the SIR Model with all the three graphs SIR within the same graph
+
+# Define the SIR model inbuilt in R
+sir_model <- function(t, y, parms) {
+  S <- y[1]
+  I <- y[2]
+  R <- y[3]
+  
+  beta <- parms["beta"]
+  gamma <- parms["gamma"]
+  
+  dS <- -beta * S * I
+  dI <- beta * S * I - gamma * I
+  dR <- gamma * I
+  
+  list(c(dS, dI, dR))
+}
+
+# Initial conditions
+initial_state <- c(S = 0.99, I = 0.01, R = 0)
+
+# Parameters
+parameters <- c(beta = 0.3, gamma = 0.1)
+
+# Time sequence
+times <- seq(0, 160, by = 1)
+
+# Solving the ODE system
+result <- ode(y = initial_state, times = times, func = sir_model, parms = parameters)
+
+# Converting result to a data frame for easier manipulation
+result_df <- as.data.frame(result)
+
+# Plotting S, I, and R over time on the same graph
+plot(result_df$time, result_df$S, type = "l", col = "blue", xlab = "Time", ylab = "Proportion", main = "SIR Model")
+lines(result_df$time, result_df$I, col = "red")
+lines(result_df$time, result_df$R, col = "green")
+legend("right", legend = c("Susceptible", "Infected", "Recovered"), col = c("blue", "red", "green"), lty = 1)
+
+
+
+
+
+```
+
+
+
+
+
+```{r}
+#Solving the SIR Model hiding one or more graphs within the same graph
+
+# Define the SIR model
+sir_model <- function(t, y, parms) {
+  S <- y[1]
+  I <- y[2]
+  R <- y[3]
+  
+  beta <- parms["beta"]
+  gamma <- parms["gamma"]
+  
+  dS <- -beta * S * I
+  dI <- beta * S * I - gamma * I
+  dR <- gamma * I
+  
+  list(c(dS, dI, dR))
+}
+
+# Initial conditions
+initial_state <- c(S = 0.99, I = 0.01, R = 0)
+
+# Parameters
+parameters <- c(beta = 0.3, gamma = 0.1)
+
+# Time sequence
+times <- seq(0, 160, by = 1)
+
+# Solving the ODE system
+result <- ode(y = initial_state, times = times, func = sir_model, parms = parameters)
+
+# Converting result to a data frame for easier manipulation
+result_df <- as.data.frame(result)
+
+# Plotting S, I, and R over time on the same graph
+plot(result_df$time, result_df$S, type = "l", col = "blue", xlab = "Time", ylab = "Proportion", main = "SIR Model")
+#lines(result_df$time, result_df$I, col = "red") (Hides the infected class)
+lines(result_df$time, result_df$R, col = "green")
+legend("right", legend = c("Susceptible", "Recovered"), col = c("blue",  "green"), lty = 1)
+
+
+```
+
+ 
+
+```{r}
+# Solving and simulating ODE models not inbuilt in R (More than 3 differential equations)
+#All the compartments/graphs in one figure
+
+# Define the system of ODEs
+system <- function(t, y, parms) {
+  with(as.list(c(y, parms)), {
+  #define the parameters
+   bh <- 0.2
+   c1 <- 0.9
+   Bh <- 0.02
+   m2 <- 0.6
+   m1 <- 0.6
+   dn <- 0.05
+   r <- 0.4
+   dd <- 0.6
+   bv <- 0.8
+   c2 <- 0.6
+   Bv <- 0.3
+   dv <- 0.6
+  #write/code the differential equations
+   dSh <- bh * Nh - ((c1*Bh*Sh*Iv)/Nh) + m2*R - dn*Sh
+   dE <- ((c1*Bh*Sh*Iv)/Nh) -(m1 + dn)*E
+    dI <- m1*E - (r + dn + dd)*I 
+    dR <- r*I - (dn + m2)*R
+    dSv <- bv*Nv - ((c2*Bv*Sv*I)/Nv) - dv*Sv
+    dIv <- ((c2*Bv*Sv*I)/Nv) - dv * Iv
+    dNh <- bh*Nh - (dn + dd)*Nh
+    dNv <- bv * Nv - dv*Nv 
+    return(list(c(dSh, dE, dI, dR, dSv, dIv, dNh, dNv)))
+  })
+}
+
+# Initial conditions
+initial_conditions <- c(Sh = 100.0, E = 1.0, I = 1.0, R = 1.0, Sv = 1000.0, Iv = 1.0, Nh = 110.0, Nv = 10000.0)
+
+# Time points
+times <- seq(0, 10, by = 0.1)
+
+# Parameters if any
+#parameters <- NULL
+
+# Solve the ODEs
+sol <- ode(y = initial_conditions, times = times, func = system, parms = parameters)
+
+# Plot the solutions
+matplot(sol[,"time"], sol[,c("Sh","E","I","R","Sv","Iv","Nh","Nv")], type = "l",
+        xlab = "Time", ylab = "Compartments", main = "Solutions of the system of ODEs",
+        col = 1:8, lty = 1, lwd = 2)
+legend("topright", legend = c("Sh", "E", "I", "R", "Sv", "Iv", "Nh", "Nv"),
+       col = 1:8, lty = 1, lwd = 2)
+
+
+```
+
+```{r}
+# Solving ODEs with Reduced variables shown on the same graph
+
+# Define the system of ODEs
+system <- function(t, y, parms) {
+  with(as.list(c(y, parms)), {
+   bh <- 0.2
+   c1 <- 0.9
+   Bh <- 0.2
+   m2 <- 0.6
+   m1 <- 0.6
+   dn <- 0.05
+   r <- 0.4
+   dd <- 0.6
+   bv <- 0.8
+   c2 <- 0.6
+   Bv <- 0.3
+   dv <- 0.6
+    
+   dSh <- bh * Nh - ((c1*Bh*Sh*Iv)/Nh) + m2*R - dn*Sh
+   dE <- ((c1*Bh*Sh*Iv)/Nh) -(m1 + dn)*E
+    dI <- m1*E - (r + dn + dd)*I 
+    dR <- r*I - (dn + m2)*R
+    dSv <- bv*Nv - ((c2*Bv*Sv*I)/Nv) - dv*Sv
+    dIv <- ((c2*Bv*Sv*I)/Nv) - dv * Iv
+    dNh <- bh*Nh - (dn + dd)*Nh
+    dNv <- bv * Nv - dv*Nv 
+    return(list(c(dSh, dE, dI, dR, dSv, dIv, dNh, dNv)))
+  })
+}
+
+# Initial conditions
+initial_conditions <- c(Sh = 100.0, E = 1.0, I = 1.0, R = 1.0, Sv = 1000.0, Iv = 1.0, Nh = 110.0, Nv = 10000.0)
+
+# Time points
+times <- seq(0, 100, by = 0.1)
+
+# Parameters if any
+parameters <- NULL
+
+# Solve the ODEs
+sol <- ode(y = initial_conditions, times = times, func = system, parms = parameters)
+
+# Plot the solutions
+matplot(sol[,"time"], sol[,c("E","I")], type = "l",
+        xlab = "Time", ylab = "Infected population", main = "SEIR Malaria Model",
+        col = 1:8, lty = 1, lwd = 2)
+legend("topright", legend = c("E", "I"),
+       col = 1:8, lty = 1, lwd = 2)
+
+
+```
+
+
+
+```{r}
+
+ #Solving SIR Model and Validation by actual data for Infected Individuals)
+
+# Define the SIR model
+sir_model <- function(time, state, parameters) {
+  with(as.list(c(state, parameters)), {
+    dS <- -beta * S * I
+    dI <- beta * S * I - gamma * I
+    dR <- gamma * I
+    list(c(dS, dI, dR))
+  })
+}
+
+# Initial conditions and parameters
+initial_state <- c(S = 999, I = 1, R = 0)
+parameters <- c(beta = 0.3, gamma = 0.1)
+times <- seq(0, 100, by = 1)
+
+# Solve the ODE
+output <- ode(y = initial_state, times = times, func = sir_model, parms = parameters)
+output <- as.data.frame(output)
+
+# Example empirical data
+empirical_data <- data.frame(
+       time = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 60, 65, 70, 75, 80, 85, 90),
+  infected = c(700, 502, 450, 315, 240, 190, 150, 50, 50, 30, 31, 35, 20, 15, 10, 5, 3)
+)
+
+# Plot the results
+ggplot() +
+  geom_line(data = output, aes(x = time, y = I, color = "Model")) +
+  geom_point(data = empirical_data, aes(x = time, y = infected, color = "Empirical Data")) +
+  labs(title = "SIR Model Validation", x = "Time", y = "Infected Individuals") +
+  scale_color_manual(name = "Legend", values = c("Model" = "blue", "Empirical Data" = "red")) +
+  theme_minimal()
+
+# Quantitative validation: RMSE
+validation_data <- merge(output, empirical_data, by = "time")
+rmse <- sqrt(mean((validation_data$I - validation_data$infected)^2))
+print(paste("Root Mean Square Error:", rmse))
+
+
+
+
+```
+```{r}
+ #Solving SIR Model and Validation by actual data for Recovered Individuals)
+
+# Define the SIR model
+sir_model <- function(time, state, parameters) {
+  with(as.list(c(state, parameters)), {
+    dS <- -beta * S * I
+    dI <- beta * S * I - gamma * I
+    dR <- gamma * I
+    list(c(dS, dI, dR))
+  })
+}
+
+# Initial conditions and parameters
+initial_state <- c(S = 999, I = 1, R = 0)
+parameters <- c(beta = 0.3, gamma = 0.1)
+times <- seq(0, 100, by = 1)
+
+# Solve the ODE
+output <- ode(y = initial_state, times = times, func = sir_model, parms = parameters)
+output <- as.data.frame(output)
+
+# Example empirical data
+empirical_data <- data.frame(
+       time = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 60, 65, 70, 75, 80, 85, 90),
+  recovered = c(0, 240, 450, 600, 740, 753, 810, 849, 850, 890, 900, 970, 1000, 1000, 1110, 998, 1000)
+)
+
+# Plot the results
+ggplot() +
+  geom_line(data = output, aes(x = time, y = R, color = "Model")) +
+  geom_line(data = empirical_data, aes(x = time, y = recovered, color = "Empirical Data")) +
+  labs(title = "SIR Model Validation", x = "Time", y = "Recovered Individuals") +
+  scale_color_manual(name = "Legend", values = c("Model" = "blue", "Empirical Data" = "red")) +
+  theme_minimal()
+
+# Quantitative validation: RMSE
+validation_data <- merge(output, empirical_data, by = "time")
+rmse <- sqrt(mean((validation_data$I - validation_data$recovered)^2))
+print(paste("Root Mean Square Error:", rmse))
+
+```
+
+
+
+
+
+
+```{r}
+#Solving and validating ODEs within the same graph.(this is difficult to interpret and therefore not very useful)
+# Define the complex system of ODEs
+complex_system <- function(t, state, parameters) {
+  with(as.list(c(state, parameters)), {
+   dSh <- bh * Nh - ((c1*Bh*Sh*Iv)/Nh) + m2*R - dn*Sh
+   dE <- ((c1*Bh*Sh*Iv)/Nh) -(m1 + dn)*E
+    dI <- m1*E - (r + dn + dd)*I 
+    dR <- r*I - (dn + m2)*R
+    dSv <- bv*Nv - ((c2*Bv*Sv*I)/Nv) - dv*Sv
+    dIv <- ((c2*Bv*Sv*I)/Nv) - dv * Iv
+    dNh <- bh*Nh - (dn + dd)*Nh
+    dNv <- bv * Nv - dv*Nv 
+    list(c(dSh, dE, dI, dR, dSv, dIv, dNh, dNv))
+  })
+}
+# Initial conditions
+state <- c(Sh = 2000, E = 1000, I = 1800, R = 4000, Sv = 10.0, Iv = 1.0, Nh = 9000, Nv = 120.0)
+
+# Parameters: p1, p2, ..., p16
+parameters <- c(bh <- 0.2, c1 = 0.9, Bh = 0.05, m2 = 0.6, m1 = 0.6, dn = 0.2, r = 0.4, 
+   dd = 0.6, bv = 0.8, c2 = 0.6, Bv = 0.003, dv = 0.6)
+
+# Time
+times <- seq(0, 20, by = 1)
+
+# Solve the ODE
+out <- ode(y = state, times = times, func = complex_system, parms = parameters)
+
+# Convert the output to a data frame for easier handling
+out <- as.data.frame(out)
+
+# Melt the data for easier plotting with ggplot2
+melted_out <- melt(out, id.vars = "time")
+
+ggplot(melted_out, aes(x = time, y = value, colour = variable)) +
+  geom_line() +
+  labs(title = "Complex ODE System", x = "Time", y = "Compartments")
+
+# Sample actual data (replace with real data)
+actual_data <- data.frame(time = c(0, 5, 10, 15, 20, 25),
+                          Sh = c(1000, 2000, 3000, 4000, 6000, 9000),
+                          E = c(200, 300, 500, 500, 200, 400),
+                          I = c(1000, 1400, 1050, 1600, 1520, 1800),
+                          R = c(700, 800, 900, 1000, 1100, 1200),
+                          Sv = c(8000, 7000, 6000, 5000, 4000, 3000),
+                          Iv = c(600, 500, 400, 300, 200, 100),
+                          Nh = c(1370, 2500, 3700, 4500, 6600, 10000),
+                          Nv = c(1000, 2000, 3000, 4000, 5000, 5000))
+
+# Melt the actual data for easier plotting
+melted_actual_data <- melt(actual_data, id.vars = "time")
+
+# Plot the actual data
+ggplot() +
+  geom_line(data = melted_out, aes(x = time, y = value, colour = variable), linetype = "dashed") +
+  geom_line(data = melted_actual_data, aes(x = time, y = value, colour = variable)) +
+  labs(title = "Model vs Actual Data", x = "Time", y = "value")
+# Calculate residuals for each variable
+residuals <- data.frame(time = actual_data$time)
+for (var in names(actual_data)[-1]) {
+  residuals[[var]] <- actual_data[[var]] - out[[var]][match(actual_data$time, out$time)]
+}
+
+# Melt the residuals for easier plotting
+melted_residuals <- melt(residuals, id.vars = "time")
+
+# Plot residuals
+ggplot(melted_residuals, aes(x = time, y = value, colour = variable)) +
+  geom_point() +
+  labs(title = "Residuals", x = "Time", y = "Residuals")
+
+# Calculate summary statistics for residuals
+summary_statistics <- lapply(residuals[-1], summary)
+summary_statistics
+```
+
+
+
+```{r}
+#Solving ODEs and validation for each compartment(Recovered class)
+# Define the  ODE system
+ode_model <- function(t, state, parameters) {
+  with(as.list(c(state, parameters)), {
+    # Example equations (replace with actual model)
+     dSh <- bh * Nh - ((c1*Bh*Sh*Iv)/Nh) + m2*R - dn*Sh
+   dE <- ((c1*Bh*Sh*Iv)/Nh) -(m1 + dn)*E
+    dI <- m1*E - (r + dn + dd)*I 
+    dR <- r*I - (dn + m2)*R
+    dSv <- bv*Nv - ((c2*Bv*Sv*I)/Nv) - dv*Sv
+    dIv <- ((c2*Bv*Sv*I)/Nv) - dv * Iv
+    dNh <- bh*Nh - (dn + dd)*Nh
+    dNv <- bv * Nv - dv*Nv
+
+    # Return the rate of change
+    list(c(dSh, dE, dI, dR, dSv, dIv, dNh, dNv))
+  })
+}
+# Initial conditions
+state <- c(Sh = 2000, E = 1000, I = 1800, R = 4000, Sv = 10.0, Iv = 1.0, Nh = 9000, Nv = 120.0)
+
+# Parameters (example values, replace with actual parameters)
+parameters <- c(bh <- 0.2, c1 = 0.9, Bh = 0.05, m2 = 0.6, m1 = 0.6, dn = 0.2, r = 0.4, 
+   dd = 0.6, bv = 0.8, c2 = 0.6, Bv = 0.003, dv = 0.6)
+
+# Time sequence
+times <- seq(0, 25, by = 0.1)
+
+# Solve the ODE system
+out <- ode(y = state, times = times, func = ode_model, parms = parameters)
+
+# Convert to a data frame
+out <- as.data.frame(out)
+# Sample actual data (replace with real data)
+actual_data <- data.frame(time = c(0, 5, 10, 15, 20, 25),
+                          R = c(3000, 500, 400, 48, 20, 10))
+
+# Plot the model predictions and actual data for R
+
+
+ggplot() +
+  geom_line(data = out, aes(x = time, y = R, colour = "Model R")) +
+  geom_point(data = actual_data, aes(x = time, y = R, colour = "Actual R"), size = 3) +
+  labs(title = "Model vs Actual Data for Recovered", x = "Time", y = "Recovered Population") +
+  scale_colour_manual("", 
+                      breaks = c("Model R", "Actual R"),
+                      values = c("blue", "red"))
+
+# Calculate residuals for R
+residuals_R <- actual_data$R - out$R[match(actual_data$time, out$time)]
+
+# Plot residuals
+ggplot() +
+  geom_point(aes(x = actual_data$time, y = residuals_R), colour = "red") +
+  labs(title = "Residuals for R", x = "Time", y = "Residuals")
+# Calculate summary statistics for residuals
+summary(residuals_R)
+
+```
+```{r}
+#Solving ODEs and validation for each compartment(Infected class)
+# Define the  ODE system
+ode_model <- function(t, state, parameters) {
+  with(as.list(c(state, parameters)), {
+    # Example equations (replace with actual model)
+     dSh <- bh * Nh - ((c1*Bh*Sh*Iv)/Nh) + m2*R - dn*Sh
+   dE <- ((c1*Bh*Sh*Iv)/Nh) -(m1 + dn)*E
+    dI <- m1*E - (r + dn + dd)*I 
+    dR <- r*I - (dn + m2)*R
+    dSv <- bv*Nv - ((c2*Bv*Sv*I)/Nv) - dv*Sv
+    dIv <- ((c2*Bv*Sv*I)/Nv) - dv * Iv
+    dNh <- bh*Nh - (dn + dd)*Nh
+    dNv <- bv * Nv - dv*Nv
+
+    # Return the rate of change
+    list(c(dSh, dE, dI, dR, dSv, dIv, dNh, dNv))
+  })
+}
+# Initial conditions
+state <- c(Sh = 2000, E = 1000, I = 1800, R = 4000, Sv = 10.0, Iv = 1.0, Nh = 9000, Nv = 120.0)
+
+# Parameters (example values, replace with actual parameters)
+parameters <- c(bh <- 0.2, c1 = 0.9, Bh = 0.05, m2 = 0.6, m1 = 0.6, dn = 0.2, r = 0.4, 
+   dd = 0.6, bv = 0.8, c2 = 0.6, Bv = 0.003, dv = 0.6)
+
+# Time sequence
+times <- seq(0, 25, by = 0.1)
+
+# Solve the ODE system
+out <- ode(y = state, times = times, func = ode_model, parms = parameters)
+
+# Convert to a data frame
+out <- as.data.frame(out)
+# Sample actual data (replace with real data)
+actual_data <- data.frame(time = c(0, 5, 10, 15, 20, 25),
+                          I = c(1500, 200, 100, 48, 20, 10))
+
+# Plot the model predictions and actual data for R
+
+
+ggplot() +
+  geom_line(data = out, aes(x = time, y = I, colour = "Model I")) +
+  geom_point(data = actual_data, aes(x = time, y = I, colour = "Actual I"), size = 3) +
+  labs(title = "Model vs Actual Data for Infected", x = "Time", y = "Infected Population") +
+  scale_colour_manual("", 
+                      breaks = c("Model I", "Actual I"),
+                      values = c("blue", "red"))
+
+# Calculate residuals for R
+residuals_I <- actual_data$I - out$I[match(actual_data$time, out$time)]
+
+# Plot residuals
+ggplot() +
+  geom_point(aes(x = actual_data$time, y = residuals_I), colour = "red") +
+  labs(title = "Residuals for I", x = "Time", y = "Residuals")
+# Calculate summary statistics for residuals
+summary(residuals_I)
+
+
+```
+
+
+
+
